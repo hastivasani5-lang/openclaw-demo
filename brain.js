@@ -29,7 +29,7 @@ async function callOpenRouter(prompt) {
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
+          temperature: 1.0,
           response_format: { type: 'json_object' }
         })
       });
@@ -101,8 +101,12 @@ function buildPrompt(profile) {
     ? `\n- Skills listed by candidate: ${profile.skills}`
     : '';
 
+  // Unique seed so AI generates a fresh task every time
+  const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
   return `You are a senior hiring manager at Sensussoft, a software company in India.
 A candidate has applied for the role: "${profile.role}".
+Request ID: ${seed} — use this to ensure a UNIQUE task every time.
 
 Form details provided:
 - Name: ${profile.name}
@@ -135,7 +139,19 @@ STEP 3 — Analyze the candidate's profile using ALL available data:
 - Determine real years of experience from CV work history (if available)
 - Identify the candidate's strongest technologies
 
-STEP 4 — Generate a task that matches BOTH the category and the seniority.
+STEP 4 — Generate a UNIQUE, SPECIFIC task.
+
+UNIQUENESS RULES — VERY IMPORTANT:
+- The task title must be SPECIFIC to the exact skills listed. 
+  BAD: "Build a Todo App" (too generic, same for everyone)
+  GOOD: "Build a React + Node.js Inventory Dashboard with JWT Auth" (uses their exact skills)
+- Pick a REAL-WORLD business scenario — e-commerce, healthcare, fintech, logistics, education, etc.
+  Vary the domain based on the candidate's name and skills combination.
+- Requirements must use the candidate's EXACT listed technologies.
+  If they listed "React, Redux, TypeScript" — all three must appear in requirements.
+  If they listed "Python, Django, PostgreSQL" — all three must appear.
+- NEVER generate a generic "Todo List" or "Blog App" task.
+- Each task must feel like it was written specifically for THIS candidate.
 
 CRITICAL RULES BY CATEGORY:
 - design      => Figma mockup or design system task. NO coding. Deliverable is a Figma file link or PDF.
@@ -157,11 +173,11 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
   "category":            "design|qa|devops|product|development",
   "cv_summary":          "one-sentence read of the candidate based on form + CV",
   "detected_seniority":  "junior|mid|senior",
-  "title":               "short task title",
-  "scenario":            "2-3 sentences setting up the problem",
-  "requirements":        ["...", "...", "..."],
-  "deliverables":        ["...", "..."],
-  "evaluation_criteria": ["...", "...", "...", "..."],
+  "title":               "short task title — must include candidate's actual technologies",
+  "scenario":            "2-3 sentences with a specific real-world business context",
+  "requirements":        ["req using skill 1", "req using skill 2", "req using skill 3", "req 4"],
+  "deliverables":        ["deliverable 1", "deliverable 2"],
+  "evaluation_criteria": ["criteria 1", "criteria 2", "criteria 3", "criteria 4"],
   "deadline_days":       3
 }`;
 }
