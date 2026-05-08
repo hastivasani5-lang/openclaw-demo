@@ -30,7 +30,7 @@ async function callOpenRouter(prompt) {
           model,
           messages: [{ role: 'user', content: prompt }],
           temperature:  1.0,
-          max_tokens:   800,   // enough for task JSON, stops model rambling
+          max_tokens:   1200,
           response_format: { type: 'json_object' }
         })
       });
@@ -156,8 +156,33 @@ async function generateTask(profile) {
   const prompt = buildPrompt(profile);
   let text = await callOpenRouter(prompt);
   if (!text) throw new Error('AI returned empty response. Please try again.');
+
   text = text.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(text);
+
+  // Fix truncated JSON — if it ends mid-string, try to close it
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    // Attempt to repair truncated JSON by closing open structures
+    console.warn('JSON parse failed, attempting repair. Error:', e.message);
+    let repaired = text;
+    // Count unclosed brackets/braces
+    const opens  = (repaired.match(/\[/g) || []).length;
+    const closes = (repaired.match(/\]/g) || []).length;
+    const openB  = (repaired.match(/\{/g) || []).length;
+    const closeB = (repaired.match(/\}/g) || []).length;
+    // Close any open string first
+    if ((repaired.match(/"/g) || []).length % 2 !== 0) repaired += '"';
+    // Close arrays and objects
+    for (let i = 0; i < opens - closes; i++)  repaired += ']';
+    for (let i = 0; i < openB - closeB; i++)  repaired += '}';
+    try {
+      parsed = JSON.parse(repaired);
+    } catch (e2) {
+      throw new Error('AI returned malformed response. Please try again.');
+    }
+  }
 
   // AI returned a validation error
   if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills' ||
