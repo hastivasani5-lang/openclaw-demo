@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "server.js": {
+      "maxDuration": 60
+    }
+  },
   "builds": [
     {
       "src": "public/**",
@@ -7,14 +12,7 @@
     },
     {
       "src": "server.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 60,
-        "includeFiles": [
-          "node_modules/pdf-parse/lib/**",
-          "node_modules/pdf-parse/index.js"
-        ]
-      }
+      "use": "@vercel/node"
     }
   ],
   "routes": [

@@ -25,7 +25,7 @@ async function callOpenRouter(prompt) {
           'HTTP-Referer':  'https://sensussoft.com',
           'X-Title':       'Sensussoft Hiring Demo'
         },
-        signal: AbortSignal.timeout(25000),   // 25 second timeout per model
+        signal: AbortSignal.timeout(15000),   // 15s per model, 3 models = 45s max
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: prompt }],
