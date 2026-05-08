@@ -1,9 +1,8 @@
-// server.js (v2) — accepts CV upload alongside form fields
+// server.js (v2) — Vercel serverless compatible
 require('dotenv').config();
 
 const express  = require('express');
 const multer   = require('multer');
-const pdfParse = require('pdf-parse');
 const mammoth  = require('mammoth');
 const cors     = require('cors');
 
@@ -25,26 +24,31 @@ const upload = multer({
 async function extractCvText(file) {
   if (!file) return '';
   try {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+    const name = file.originalname.toLowerCase();
+
+    if (file.mimetype === 'application/pdf' || name.endsWith('.pdf')) {
+      // Use pdf-parse safely — dynamic require avoids Vercel build issues
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const data = await pdfParse(file.buffer);
       return (data.text || '').trim();
     }
-    if (file.mimetype.includes('word') || file.originalname.toLowerCase().endsWith('.docx')) {
+
+    if (file.mimetype.includes('word') || name.endsWith('.docx')) {
       const result = await mammoth.extractRawText({ buffer: file.buffer });
       return (result.value || '').trim();
     }
+
     console.warn('Unsupported CV type:', file.mimetype, file.originalname);
     return '';
   } catch (err) {
     console.error('CV extraction failed:', err.message);
-    return '';
+    return '';   // non-fatal — continue without CV text
   }
 }
 
-// Single endpoint — multer parses multipart, then brain runs
+// Single endpoint
 app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
 
-  // multer only parses multipart — if JSON was sent, req.body comes from express.json()
   const cvText = await extractCvText(req.file);
 
   const b = req.body || {};
@@ -65,17 +69,22 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
     const result = await processCandidate(profile);
     res.json(result);
   } catch (err) {
-    console.error('ERROR:', err.message);
+    console.error('ERROR:', err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 
 });
 
-const PORT = 4000;
-app.listen(PORT, () => {
-  console.log('=================================');
-  console.log('  Sensussoft Demo (v2) running');
-  console.log('  http://localhost:' + PORT);
-  console.log('=================================');
-  console.log('Open demo-form.html in your browser.\n');
-});
+// Local dev server
+if (require.main === module) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log('=================================');
+    console.log('  Sensussoft Demo (v2) running');
+    console.log('  http://localhost:' + PORT);
+    console.log('=================================');
+  });
+}
+
+// Vercel serverless export
+module.exports = app;
