@@ -8,8 +8,7 @@ const https       = require('https');
 // ---------- OpenRouter call with automatic fallback ----------
 
 const FALLBACK_MODELS = [
-  process.env.OPENROUTER_PRIMARY_MODEL || 'google/gemma-4-27b-it:free',
-  'google/gemma-4-31b-it:free',
+  process.env.OPENROUTER_PRIMARY_MODEL || 'google/gemma-4-31b-it:free',
   'nvidia/nemotron-3-super-120b-a12b:free',
   'openrouter/free',
 ];
@@ -26,10 +25,12 @@ async function callOpenRouter(prompt) {
           'HTTP-Referer':  'https://sensussoft.com',
           'X-Title':       'Sensussoft Hiring Demo'
         },
+        signal: AbortSignal.timeout(25000),   // 25 second timeout per model
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 1.0,
+          temperature:  1.0,
+          max_tokens:   800,   // enough for task JSON, stops model rambling
           response_format: { type: 'json_object' }
         })
       });
@@ -94,91 +95,49 @@ function getLevel(detectedSeniority) {
 
 function buildPrompt(profile) {
   const cvBlock = profile.cv_text
-    ? '\n\nThe candidate uploaded this CV/Resume. Read it carefully:\n"""\n' + profile.cv_text + '\n"""\n'
-    : '\n\nNo CV was uploaded. Use only the form fields above.\n';
+    ? '\nCV uploaded:\n"""\n' + profile.cv_text.slice(0, 3000) + '\n"""\n'
+    : '\nNo CV uploaded.\n';
 
-  const skillsBlock = profile.skills
-    ? `\n- Skills listed by candidate: ${profile.skills}`
-    : '';
-
-  // Unique seed so AI generates a fresh task every time
   const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-  return `You are a senior hiring manager at Sensussoft, a software company in India.
-A candidate has applied for the role: "${profile.role}".
-Request ID: ${seed} — use this to ensure a UNIQUE task every time.
+  return `You are a hiring manager at Sensussoft. Generate a unique hiring task.
+Seed: ${seed}
 
-Form details provided:
+Candidate:
 - Name: ${profile.name}
-- Role applied: ${profile.role}${skillsBlock}
+- Role: ${profile.role}
+- Skills: ${profile.skills || 'not provided'}
 ${cvBlock}
 
-STEP 1 — Validate the role and skills:
-- If the role looks like random characters (e.g. "fyfvcf", "iuwhdygwe", "asdfgh") with no real meaning,
-  return this exact JSON and nothing else:
-  {"error": "invalid_role", "message": "The role entered does not appear to be a valid job title. Please enter a real role like Frontend Developer, UI/UX Designer, or DevOps Engineer."}
-- If the skills look like random characters with no recognizable technology or domain,
-  return this exact JSON and nothing else:
-  {"error": "invalid_skills", "message": "The skills entered do not appear to be valid. Please enter real skills like React, Node.js, Figma, Python, Docker, etc."}
-- If a CV was provided but it does NOT look like a resume (no work experience, education, or skills sections),
-  return this exact JSON and nothing else:
-  {"error": "invalid_cv", "message": "The uploaded document does not appear to be a CV or Resume. Please upload your actual resume."}
+RULES:
+1. Validate first — if role or skills are gibberish/random chars, return:
+   {"error":"invalid_role","message":"..."} or {"error":"invalid_skills","message":"..."}
 
-STEP 2 — Identify role category from the role name:
-- Contains "Designer", "UI", "UX", "Visual"                                        => CATEGORY = "design"
-- Contains "QA", "Tester", "SDET", "Automation"                                    => CATEGORY = "qa"
-- Contains "DevOps", "SRE", "Platform", "Cloud Engineer"                           => CATEGORY = "devops"
-- Contains "Product Manager", "PM", "Business Analyst"                             => CATEGORY = "product"
-- Contains "Developer", "Engineer", "Mobile", "Frontend", "Backend", "Full Stack"  => CATEGORY = "development"
-- Otherwise                                                                         => CATEGORY = "development"
+2. Role category:
+   Designer/UI/UX → "design" (Figma task, NO coding)
+   QA/Tester/SDET → "qa" (test plan + automation)
+   DevOps/SRE/Cloud → "devops" (CI/CD or IaC)
+   Product Manager/PM → "product" (PRD or roadmap)
+   Developer/Engineer/Mobile/Frontend/Backend → "development" (coding task)
 
-STEP 3 — Analyze the candidate's profile using ALL available data:
-- Form skills field: "${profile.skills || 'not provided'}"
-- CV text (if uploaded): use technologies, projects, and experience from the CV
-- Combine both sources — CV takes priority if it contradicts the form
-- Determine real years of experience from CV work history (if available)
-- Identify the candidate's strongest technologies
+3. Task MUST use candidate's EXACT listed skills in requirements.
+   NEVER generate a generic "Todo App" or "Blog App".
+   Pick a real business domain: fintech, healthcare, e-commerce, logistics, etc.
 
-STEP 4 — Generate a UNIQUE, SPECIFIC task.
+4. Seniority from role name or CV:
+   Junior → simple 3hr task | Mid → 6hr task | Senior → 8hr complex task
 
-UNIQUENESS RULES — VERY IMPORTANT:
-- The task title must be SPECIFIC to the exact skills listed. 
-  BAD: "Build a Todo App" (too generic, same for everyone)
-  GOOD: "Build a React + Node.js Inventory Dashboard with JWT Auth" (uses their exact skills)
-- Pick a REAL-WORLD business scenario — e-commerce, healthcare, fintech, logistics, education, etc.
-  Vary the domain based on the candidate's name and skills combination.
-- Requirements must use the candidate's EXACT listed technologies.
-  If they listed "React, Redux, TypeScript" — all three must appear in requirements.
-  If they listed "Python, Django, PostgreSQL" — all three must appear.
-- NEVER generate a generic "Todo List" or "Blog App" task.
-- Each task must feel like it was written specifically for THIS candidate.
-
-CRITICAL RULES BY CATEGORY:
-- design      => Figma mockup or design system task. NO coding. Deliverable is a Figma file link or PDF.
-- qa          => Test plan, test cases, and one small automation script. Deliverable is a doc + GitHub repo.
-- devops      => CI/CD pipeline, IaC, or deployment automation. Deliverable is a GitHub repo with config files.
-- product     => PRD, user story breakdown, or roadmap. Deliverable is a Google Doc or PDF.
-- development => Coding task using the candidate's actual skills from form + CV. Deliverable is a GitHub repo link.
-
-SENIORITY RULES:
-- Junior (0-2y): ~3 hours of work, well-guided, single feature.
-- Mid    (3-5y): ~6 hours, full feature with multiple parts.
-- Senior (6+y):  ~8 hours, includes architectural / strategic thinking.
-
-Deadline: 3 days.
-Include exactly 4 evaluation criteria appropriate to the category.
-
-Return ONLY valid JSON with these exact keys (no markdown, no code fences):
+Return ONLY this JSON (no markdown):
 {
-  "category":            "design|qa|devops|product|development",
-  "cv_summary":          "one-sentence read of the candidate based on form + CV",
-  "detected_seniority":  "junior|mid|senior",
-  "title":               "short task title — must include candidate's actual technologies",
-  "scenario":            "2-3 sentences with a specific real-world business context",
-  "requirements":        ["req using skill 1", "req using skill 2", "req using skill 3", "req 4"],
-  "deliverables":        ["deliverable 1", "deliverable 2"],
+  "category": "design|qa|devops|product|development",
+  "cv_summary": "one sentence about candidate",
+  "detected_seniority": "junior|mid|senior",
+  "title": "specific title using their actual skills",
+  "scenario": "2-3 sentence real business context",
+  "requirements": ["req 1 using skill", "req 2", "req 3", "req 4"],
+  "deliverables": ["deliverable 1", "deliverable 2"],
   "evaluation_criteria": ["criteria 1", "criteria 2", "criteria 3", "criteria 4"],
-  "deadline_days":       3
+  "deadline_days": 3
 }`;
 }
 
