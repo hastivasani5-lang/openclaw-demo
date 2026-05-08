@@ -132,21 +132,8 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
   };
 
   try {
-    // ── Respond immediately so Vercel doesn't timeout ──────────────────────
-    // Then process in background (email + PDF + GitHub)
-    res.json({
-      ok: true,
-      accepted: true,
-      message: 'Application received! Your task is being generated and will be emailed to you shortly.'
-    });
-
-    // Background processing — runs after response is sent
-    processCandidate(profile).then(result => {
-      console.log('[career-apply] Done:', result.task_title);
-    }).catch(err => {
-      console.error('[career-apply] Background error:', err.message);
-    });
-
+    const result = await processCandidate(profile);
+    res.json(result);
   } catch (err) {
     console.error('[career-apply] ERROR:', err.message);
     const status = err.validationError ? 400 : 500;
