@@ -1,74 +1,31 @@
-// brain.js (v2) — role-aware task generation with CV analysis via OpenRouter
+// brain.js (v2) — role-aware task generation with Gemini AI
 require('dotenv').config();
 
 const nodemailer  = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const https       = require('https');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// ---------- OpenRouter call with automatic fallback ----------
+// ---------- Gemini AI call ----------
 
-const FALLBACK_MODELS = [
-  process.env.OPENROUTER_PRIMARY_MODEL || 'google/gemma-4-31b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'openrouter/free',
-];
+async function callAI(prompt) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set in environment variables.');
 
-async function callOpenRouter(prompt) {
-  let lastErr;
-  for (const model of FALLBACK_MODELS) {
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + process.env.OPENROUTER_API_KEY,
-          'Content-Type':  'application/json',
-          'HTTP-Referer':  'https://sensussoft.com',
-          'X-Title':       'Sensussoft Hiring Demo'
-        },
-        signal: AbortSignal.timeout(15000),   // 15s per model, 3 models = 45s max
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature:  1.0,
-          max_tokens:   1200,
-          response_format: { type: 'json_object' }
-        })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn('Model ' + model + ' failed: ' + res.status + ' — trying next');
-        lastErr = new Error(res.status + ': ' + errText);
-        continue;
-      }
-
-      const data = await res.json();
-      console.log('Used model:', model);
-      const content = data?.choices?.[0]?.message?.content;
-      if (!content) {
-        console.warn('Model ' + model + ' returned empty content — trying next');
-        continue;
-      }
-      return content;
-
-    } catch (e) {
-      console.warn('Model ' + model + ' threw: ' + e.message);
-      lastErr = e;
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 1.0,
+      maxOutputTokens: 1200,
     }
-  }
+  });
 
-  // All models failed — check if it's a rate limit
-  const errMsg = lastErr?.message || '';
-  if (errMsg.includes('429') || errMsg.includes('rate') || errMsg.includes('Rate')) {
-    const rateLimitErr = new Error(
-      'OpenRouter free tier daily limit reached (50 requests/day). ' +
-      'Please try again tomorrow, or add credits at openrouter.ai to continue.'
-    );
-    rateLimitErr.validationError = true;  // show as 400, not 500
-    throw rateLimitErr;
-  }
-
-  throw lastErr || new Error('All AI models failed. Please try again.');
+  const result = await model.generateContent(prompt);
+  const text   = result.response.text();
+  console.log('Gemini responded, length:', text.length);
+  return text;
 }
 
 // ---------- Gmail transport ----------
@@ -154,7 +111,7 @@ Return ONLY this JSON (no markdown):
 
 async function generateTask(profile) {
   const prompt = buildPrompt(profile);
-  let text = await callOpenRouter(prompt);
+  let text = await callAI(prompt);
   if (!text) throw new Error('AI returned empty response. Please try again.');
 
   text = text.replace(/```json|```/g, '').trim();
