@@ -113,18 +113,29 @@ RULES:
 1. Validate first — if role or skills are gibberish/random chars, return:
    {"error":"invalid_role","message":"..."} or {"error":"invalid_skills","message":"..."}
 
-2. Role category:
+2. ROLE-SKILLS MISMATCH CHECK — VERY IMPORTANT:
+   - If role is design (UI, UX, Designer, Visual) but skills are ONLY coding technologies
+     (React, Vue, Angular, Node.js, Python, Django, etc.) with NO design tools
+     (Figma, Sketch, XD, Illustrator, Photoshop, Wireframing, Prototyping),
+     return ONLY this JSON:
+     {"error":"role_skills_mismatch","message":"Your role is UI/UX Designer but your skills only contain coding technologies (${profile.skills}). A UI/UX Designer should list design tools like Figma, Sketch, Adobe XD, Prototyping, Wireframing. If you are a developer, please update your role to Frontend Developer or Full Stack Developer."}
+   - If role is development (Developer, Engineer, Frontend, Backend, Full Stack, Mobile)
+     but skills are ONLY design tools (Figma, Sketch, XD, Illustrator) with NO coding skills,
+     return ONLY this JSON:
+     {"error":"role_skills_mismatch","message":"Your role is ${profile.role} but your skills only contain design tools. A developer should list coding technologies like React, Node.js, Python, etc."}
+
+3. Role category:
    Designer/UI/UX → "design" (Figma task, NO coding)
    QA/Tester/SDET → "qa" (test plan + automation)
    DevOps/SRE/Cloud → "devops" (CI/CD or IaC)
    Product Manager/PM → "product" (PRD or roadmap)
    Developer/Engineer/Mobile/Frontend/Backend → "development" (coding task)
 
-3. Task MUST use candidate's EXACT listed skills in requirements.
+4. Task MUST use candidate's EXACT listed skills in requirements.
    NEVER generate a generic "Todo App" or "Blog App".
    Pick a real business domain: fintech, healthcare, e-commerce, logistics, etc.
 
-4. Seniority from role name or CV:
+5. Seniority from role name or CV:
    Junior → simple 3hr task | Mid → 6hr task | Senior → 8hr complex task
 
 Return ONLY this JSON (no markdown):
@@ -149,7 +160,8 @@ async function generateTask(profile) {
   const parsed = JSON.parse(text);
 
   // AI returned a validation error
-  if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills' || parsed.error === 'invalid_cv') {
+  if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills' ||
+      parsed.error === 'invalid_cv'   || parsed.error === 'role_skills_mismatch') {
     const err = new Error(parsed.message);
     err.validationError = true;
     throw err;

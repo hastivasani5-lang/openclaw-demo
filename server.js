@@ -60,7 +60,30 @@ function looksLikeCV(text) {
   if (!text || text.trim().length < 100) return false;
   const lower = text.toLowerCase();
   const matches = CV_KEYWORDS.filter(k => lower.includes(k));
-  return matches.length >= 3;  // at least 3 CV keywords
+  return matches.length >= 3;
+}
+
+// ── Role-Skills mismatch check ───────────────────────────────────────────────
+const DESIGN_ROLES    = ['designer','ui','ux','visual','graphic','motion','brand','product design'];
+const DESIGN_SKILLS   = ['figma','sketch','xd','adobe xd','illustrator','photoshop','wireframe','prototype','invision','zeplin','framer','canva','indesign'];
+const CODING_SKILLS   = ['react','vue','angular','node','python','java','javascript','typescript','django','flask','express','spring','flutter','swift','kotlin','php','ruby','go','rust','c++','c#','html','css','sql','mongodb','postgres','docker','kubernetes','aws','azure','gcp','terraform','jenkins','git','graphql','rest api','next','nuxt','tailwind','bootstrap'];
+
+function checkRoleSkillsMismatch(role, skills) {
+  const roleLower   = role.toLowerCase();
+  const skillsLower = skills.toLowerCase();
+
+  const isDesignRole   = DESIGN_ROLES.some(k  => roleLower.includes(k));
+  const hasDesignSkill = DESIGN_SKILLS.some(k => skillsLower.includes(k));
+  const hasCodingSkill = CODING_SKILLS.some(k => skillsLower.includes(k));
+
+  // Designer role but only coding skills, no design tools
+  if (isDesignRole && hasCodingSkill && !hasDesignSkill) {
+    return `Role mismatch: You selected "${role}" but listed only coding skills (${skills}). ` +
+           `A UI/UX Designer should have design tools like Figma, Sketch, Adobe XD, or Prototyping. ` +
+           `Did you mean "Frontend Developer" instead?`;
+  }
+
+  return null; // no mismatch
 }
 app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
 
@@ -99,6 +122,12 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
 
   if (!profile.email) {
     return res.status(400).json({ error: 'email is required' });
+  }
+
+  // ── Role-Skills mismatch check ───────────────────────────────────────────
+  const mismatch = checkRoleSkillsMismatch(profile.role, profile.skills);
+  if (mismatch) {
+    return res.status(400).json({ error: mismatch });
   }
 
   try {
