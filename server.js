@@ -9,6 +9,8 @@ const { processCandidate } = require('./brain');
 const app = express();
 
 app.use(cors());
+app.use(express.json());                    // JSON body support
+app.use(express.urlencoded({ extended: true })); // form body support
 
 // multer — store resume in memory as Buffer
 const upload = multer({
@@ -27,9 +29,10 @@ app.post('/api/career-apply', upload.single('resume'), async (req, res) => {
     email:            req.body.email,
     role:             req.body.role,
     experience_years: req.body.experience_years,
-    skills:           req.body.skills
+    skills:           (req.body.skills || '')
                         .split(',')
-                        .map(s => s.trim()),
+                        .map(s => s.trim())
+                        .filter(Boolean),
     // resume is a Buffer (or undefined if not uploaded)
     resumeBuffer:     req.file ? req.file.buffer       : null,
     resumeFilename:   req.file ? req.file.originalname : null,

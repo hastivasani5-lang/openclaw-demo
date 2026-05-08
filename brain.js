@@ -52,10 +52,15 @@ async function createGithubRepo(profile, task) {
     auto_init:   true,   // creates main branch with README
   });
 
-  // Decide endpoint: org repo or personal repo
-  const path = org
-    ? `/orgs/${org}/repos`
-    : `/user/repos`;
+  // Personal account ke liye /user/repos, org ke liye /orgs/{org}/repos
+  // Pehle check karo ki org hai ya personal account
+  let path;
+  try {
+    const orgCheck = await githubRequest('GET', `/orgs/${org}`, token);
+    path = orgCheck.login ? `/orgs/${org}/repos` : `/user/repos`;
+  } catch (_) {
+    path = `/user/repos`;
+  }
 
   const repoData = await githubRequest('POST', path, token, body);
 
