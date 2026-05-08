@@ -27,9 +27,9 @@ async function extractCvText(file) {
     const name = file.originalname.toLowerCase();
 
     if (file.mimetype === 'application/pdf' || name.endsWith('.pdf')) {
-      const { PDFParse } = require('pdf-parse');
-      const parser = new PDFParse({ verbosity: 0, data: file.buffer });
-      const data = await parser.getText({});
+      // pdf-parse v1 — simple, Vercel compatible
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(file.buffer);
       return (data.text || '').trim();
     }
 
