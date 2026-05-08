@@ -29,7 +29,7 @@
     .card-header { text-align: center; margin-bottom: 32px; }
     .card-header .icon { font-size: 40px; margin-bottom: 10px; }
     .card-header h1 { font-size: 26px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
-    .card-header p { font-size: 14px; color: #888; }
+    .card-header p { font-size: 14px; color: #888; line-height: 1.5; }
 
     .form-group { margin-bottom: 20px; }
 
@@ -43,7 +43,7 @@
       letter-spacing: 0.5px;
     }
 
-    input, select {
+    input, textarea {
       width: 100%;
       padding: 12px 16px;
       border: 2px solid #e8e8e8;
@@ -51,18 +51,32 @@
       font-size: 15px;
       color: #333;
       background: #fafafa;
-      transition: border-color 0.25s, box-shadow 0.25s;
+      transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
       outline: none;
       font-family: inherit;
+      resize: none;
     }
 
-    input:focus, select:focus {
+    input:focus, textarea:focus {
       border-color: #667eea;
       background: #fff;
       box-shadow: 0 0 0 4px rgba(102,126,234,0.12);
     }
 
-    input::placeholder { color: #bbb; }
+    input.error, textarea.error {
+      border-color: #e53935;
+      background: #fff5f5;
+    }
+
+    input::placeholder, textarea::placeholder { color: #bbb; }
+
+    .field-error {
+      font-size: 12px;
+      color: #e53935;
+      margin-top: 5px;
+      display: none;
+    }
+    .field-error.show { display: block; }
 
     /* CV Upload */
     .upload-box {
@@ -73,14 +87,17 @@
       cursor: pointer;
       background: #fafafa;
       transition: border-color 0.25s, background 0.25s;
+      display: block;
     }
-    .upload-box:hover { border-color: #667eea; background: #f0f0ff; }
+    .upload-box:hover  { border-color: #667eea; background: #f0f0ff; }
+    .upload-box.active { border-color: #667eea; background: #f0f0ff; }
     .upload-box.has-file { border-color: #2D5A1A; background: #E2EFDA; }
-    .upload-box .icon { font-size: 28px; margin-bottom: 6px; }
-    .upload-box .text { font-size: 14px; color: #555; font-weight: 500; margin-bottom: 4px; }
-    .upload-box .hint { font-size: 12px; color: #aaa; }
-    .upload-box.has-file .text { color: #2D5A1A; }
+    .upload-box.error-box { border-color: #e53935; background: #fff5f5; }
     .upload-box input { display: none; }
+    .upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .upload-text { font-size: 14px; color: #555; font-weight: 500; margin-bottom: 4px; }
+    .upload-hint { font-size: 12px; color: #aaa; }
+    .upload-box.has-file .upload-text { color: #2D5A1A; font-weight: 600; }
 
     /* Submit */
     .submit-btn {
@@ -96,21 +113,21 @@
       margin-top: 8px;
       transition: opacity 0.2s, transform 0.15s;
     }
-    .submit-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+    .submit-btn:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
     .submit-btn:active { transform: translateY(0); }
     .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
     /* Status */
     #status {
       margin-top: 18px;
-      padding: 14px 18px;
+      padding: 16px 18px;
       border-radius: 10px;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.7;
       display: none;
     }
-    #status.ok  { background: #E2EFDA; color: #2D5A1A; display: block; }
-    #status.err { background: #FCE4E4; color: #8B1A1A; display: block; }
+    #status.ok  { background: #E2EFDA; color: #2D5A1A; display: block; border-left: 4px solid #4caf50; }
+    #status.err { background: #FCE4E4; color: #8B1A1A; display: block; border-left: 4px solid #e53935; }
 
     .badge {
       display: inline-block;
@@ -123,8 +140,8 @@
       letter-spacing: 0.5px;
       font-weight: 600;
     }
-    .badge-cat  { background: #e91e8c; }
-    .badge-lvl  { background: #374151; }
+    .badge-cat { background: #e91e8c; }
+    .badge-lvl { background: #374151; }
   </style>
 </head>
 <body>
@@ -133,43 +150,56 @@
     <div class="card-header">
       <div class="icon">🤖</div>
       <h1>Apply at Sensussoft</h1>
-      <p>Upload your CV and pick a role. Our AI reads your resume and designs a task for you.</p>
+      <p>Fill in your role, skills, and upload your CV.<br>Our AI will read everything and design a task just for you.</p>
     </div>
 
+    <!-- Full Name -->
     <div class="form-group">
       <label>Full Name</label>
-      <input id="name" type="text" placeholder="e.g. Priya Sharma">
+      <input id="name" type="text" placeholder="e.g. Priya Sharma" oninput="clearErr('name')">
+      <div class="field-error" id="err-name">Please enter your full name.</div>
     </div>
 
+    <!-- Email -->
     <div class="form-group">
       <label>Email Address</label>
-      <input id="email" type="email" placeholder="you@gmail.com">
+      <input id="email" type="email" placeholder="you@gmail.com" oninput="clearErr('email')">
+      <div class="field-error" id="err-email">Please enter a valid email address.</div>
     </div>
 
+    <!-- Role — free text -->
     <div class="form-group">
       <label>Role Applied For</label>
-      <select id="role">
-        <option>Junior React Developer</option>
-        <option>Mid-level Node.js Developer</option>
-        <option>Senior React Developer</option>
-        <option>Senior Node.js Developer</option>
-        <option>Mobile App Developer (Flutter)</option>
-        <option>UI/UX Designer</option>
-        <option>Senior UI/UX Designer</option>
-        <option>QA Automation Engineer</option>
-        <option>DevOps Engineer</option>
-        <option>Product Manager</option>
-      </select>
+      <input id="role" type="text"
+        placeholder="e.g. Frontend Developer, UI/UX Designer, DevOps Engineer"
+        oninput="clearErr('role')">
+      <div class="field-error" id="err-role">Please enter a valid role (e.g. React Developer, UI Designer).</div>
     </div>
 
+    <!-- Skills — free text -->
     <div class="form-group">
-      <label>Upload Your CV (PDF or DOCX, max 5 MB)</label>
-      <label for="cv" class="upload-box" id="uploadBox">
-        <div class="icon">📄</div>
-        <div class="text" id="uploadLabel">Click to choose your CV file</div>
-        <div class="hint">PDF or DOCX • Max 5MB</div>
-        <input id="cv" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+      <label>Your Skills</label>
+      <textarea id="skills" rows="3"
+        placeholder="e.g. React, Node.js, Figma, Python, Docker, SQL..."
+        oninput="clearErr('skills')"></textarea>
+      <div class="field-error" id="err-skills">Please enter at least one recognizable skill.</div>
+    </div>
+
+    <!-- CV Upload -->
+    <div class="form-group">
+      <label>Upload Your CV <span style="color:#aaa;font-weight:400;text-transform:none">(PDF or DOCX, max 5 MB)</span></label>
+      <label for="cv" class="upload-box" id="uploadBox"
+        ondragover="handleDragOver(event)"
+        ondragleave="handleDragLeave(event)"
+        ondrop="handleDrop(event)">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text" id="uploadLabel">Click to choose or drag & drop your CV</div>
+        <div class="upload-hint">PDF or DOCX • Max 5MB</div>
+        <input id="cv" type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onchange="handleFileChange(this)">
       </label>
+      <div class="field-error" id="err-cv"></div>
     </div>
 
     <button class="submit-btn" id="submitBtn" onclick="submitForm()">
@@ -180,50 +210,180 @@
   </div>
 
   <script>
-    // File selection handler
-    document.getElementById('cv').addEventListener('change', e => {
-      const f     = e.target.files[0];
+    // ── Validation helpers ────────────────────────────────────────────────────
+
+    // Known tech/role keywords for basic sanity check
+    const ROLE_KEYWORDS = [
+      'developer','engineer','designer','manager','analyst','architect',
+      'devops','qa','tester','frontend','backend','fullstack','full stack',
+      'mobile','flutter','react','angular','vue','node','python','java',
+      'data','ml','ai','cloud','sre','platform','product','ui','ux',
+      'intern','lead','senior','junior','mid','staff','principal','consultant',
+      'marketing','sales','hr','recruiter','writer','content','seo'
+    ];
+
+    const SKILL_KEYWORDS = [
+      'react','node','python','java','javascript','typescript','html','css',
+      'angular','vue','flutter','dart','swift','kotlin','go','rust','c++','c#',
+      'php','ruby','rails','django','flask','express','spring','docker',
+      'kubernetes','aws','azure','gcp','sql','mysql','postgres','mongodb',
+      'redis','git','figma','sketch','xd','photoshop','illustrator',
+      'jira','agile','scrum','ci','cd','jenkins','terraform','ansible',
+      'linux','bash','rest','graphql','firebase','supabase','next','nuxt',
+      'tailwind','bootstrap','sass','webpack','vite','jest','cypress',
+      'selenium','appium','postman','excel','powerbi','tableau','r','matlab',
+      'machine learning','deep learning','nlp','llm','ai','ml','data'
+    ];
+
+    function looksLikeGibberish(str) {
+      if (!str || str.trim().length < 2) return true;
+      const lower = str.toLowerCase().trim();
+      // Check consonant clusters — gibberish usually has 5+ consonants in a row
+      if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(lower)) return true;
+      // Check if it's all random chars with no vowels at all (>6 chars)
+      if (lower.length > 6 && !/[aeiou]/.test(lower)) return true;
+      return false;
+    }
+
+    function isValidRole(val) {
+      if (!val || val.trim().length < 3) return false;
+      if (looksLikeGibberish(val)) return false;
+      const lower = val.toLowerCase();
+      return ROLE_KEYWORDS.some(k => lower.includes(k));
+    }
+
+    function isValidSkills(val) {
+      if (!val || val.trim().length < 2) return false;
+      const lower = val.toLowerCase();
+      // At least one recognizable skill keyword
+      return SKILL_KEYWORDS.some(k => lower.includes(k));
+    }
+
+    function isValidEmail(val) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+    }
+
+    function showErr(field, msg) {
+      const input = document.getElementById(field);
+      const err   = document.getElementById('err-' + field);
+      if (input)  input.classList.add('error');
+      if (err)  { if (msg) err.textContent = msg; err.classList.add('show'); }
+    }
+
+    function clearErr(field) {
+      const input = document.getElementById(field);
+      const err   = document.getElementById('err-' + field);
+      if (input) input.classList.remove('error');
+      if (err)   err.classList.remove('show');
+    }
+
+    // ── File upload ───────────────────────────────────────────────────────────
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('uploadBox').classList.add('active');
+    }
+    function handleDragLeave(e) {
+      document.getElementById('uploadBox').classList.remove('active');
+    }
+    function handleDrop(e) {
+      e.preventDefault();
+      const box = document.getElementById('uploadBox');
+      box.classList.remove('active');
+      const file = e.dataTransfer.files[0];
+      if (file) setFile(file);
+    }
+
+    function handleFileChange(input) {
+      if (input.files[0]) setFile(input.files[0]);
+    }
+
+    function setFile(file) {
       const box   = document.getElementById('uploadBox');
       const label = document.getElementById('uploadLabel');
-      if (f) {
-        box.classList.add('has-file');
-        label.textContent = '✅ ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)';
-      } else {
-        box.classList.remove('has-file');
-        label.textContent = 'Click to choose your CV file';
-      }
-    });
+      const err   = document.getElementById('err-cv');
 
-    // Drag & drop
-    const box = document.getElementById('uploadBox');
-    box.addEventListener('dragover', e => { e.preventDefault(); box.style.borderColor = '#667eea'; });
-    box.addEventListener('dragleave', () => { box.style.borderColor = ''; });
-    box.addEventListener('drop', e => {
-      e.preventDefault();
-      box.style.borderColor = '';
-      const file = e.dataTransfer.files[0];
-      if (file) {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        document.getElementById('cv').files = dt.files;
-        document.getElementById('cv').dispatchEvent(new Event('change'));
+      const allowed = ['application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const name = file.name.toLowerCase();
+
+      if (!allowed.includes(file.type) && !name.endsWith('.pdf') && !name.endsWith('.docx')) {
+        box.classList.add('error-box');
+        err.textContent = '❌ Only PDF or DOCX files are allowed.';
+        err.classList.add('show');
+        return;
       }
-    });
+      if (file.size > 5 * 1024 * 1024) {
+        box.classList.add('error-box');
+        err.textContent = '❌ File too large. Max 5MB allowed.';
+        err.classList.add('show');
+        return;
+      }
+
+      // Valid file
+      box.classList.remove('error-box');
+      box.classList.add('has-file');
+      err.classList.remove('show');
+      label.textContent = '✅ ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+
+      // Put into hidden input
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('cv').files = dt.files;
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────
 
     async function submitForm() {
       const btn    = document.getElementById('submitBtn');
       const status = document.getElementById('status');
 
-      btn.disabled    = true;
-      btn.textContent = '⏳ Reading CV and generating task...';
-      status.className = '';
+      // Reset status
+      status.className   = '';
       status.textContent = '';
+
+      // Validate all fields
+      let valid = true;
+
+      const nameVal   = document.getElementById('name').value.trim();
+      const emailVal  = document.getElementById('email').value.trim();
+      const roleVal   = document.getElementById('role').value.trim();
+      const skillsVal = document.getElementById('skills').value.trim();
+
+      if (!nameVal || nameVal.length < 2) {
+        showErr('name', 'Please enter your full name.'); valid = false;
+      }
+      if (!isValidEmail(emailVal)) {
+        showErr('email', 'Please enter a valid email address.'); valid = false;
+      }
+      if (!isValidRole(roleVal)) {
+        showErr('role',
+          roleVal.length < 3
+            ? 'Please enter a role (e.g. React Developer, UI Designer).'
+            : '❌ "' + roleVal + '" doesn\'t look like a valid role. Try: Frontend Developer, UI/UX Designer, DevOps Engineer...'
+        );
+        valid = false;
+      }
+      if (!isValidSkills(skillsVal)) {
+        showErr('skills',
+          skillsVal.length < 2
+            ? 'Please enter at least one skill.'
+            : '❌ No recognizable skills found. Try: React, Node.js, Figma, Python, Docker...'
+        );
+        valid = false;
+      }
+
+      if (!valid) return;
+
+      btn.disabled    = true;
+      btn.textContent = '⏳ Analyzing CV and generating task...';
 
       try {
         const formData = new FormData();
-        formData.append('full_name', document.getElementById('name').value);
-        formData.append('email',     document.getElementById('email').value);
-        formData.append('role',      document.getElementById('role').value);
+        formData.append('full_name', nameVal);
+        formData.append('email',     emailVal);
+        formData.append('role',      roleVal);
+        formData.append('skills',    skillsVal);
 
         const cvFile = document.getElementById('cv').files[0];
         if (cvFile) formData.append('cv', cvFile);
@@ -240,17 +400,17 @@
           status.innerHTML =
             '<b>✅ Application received!</b><br>' +
             'Task: <i>' + data.task_title + '</i>' +
-            '<span class="badge badge-cat">' + (data.category || '') + '</span>' +
+            '<span class="badge badge-cat">' + (data.category  || '') + '</span>' +
             '<span class="badge badge-lvl">' + (data.seniority || '') + '</span>' +
-            '<br>Check your email in a few seconds.';
+            '<br><span style="font-size:13px;color:#555;">Check your email in a few seconds.</span>';
         } else {
           status.className = 'err';
-          status.textContent = 'Error: ' + (data.error || 'unknown');
+          status.textContent = '❌ ' + (data.error || 'Something went wrong. Please try again.');
         }
 
       } catch (e) {
         status.className = 'err';
-        status.textContent = 'Could not reach the server. Is it running?';
+        status.textContent = '❌ Could not reach the server. Please try again.';
       } finally {
         btn.disabled    = false;
         btn.textContent = '🚀 Submit Application';

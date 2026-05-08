@@ -8,10 +8,10 @@ const https       = require('https');
 // ---------- OpenRouter call with automatic fallback ----------
 
 const FALLBACK_MODELS = [
-  process.env.OPENROUTER_PRIMARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemini-2.0-flash-exp:free',
-  'openrouter/free',   // auto-selects any available free model
-  'deepseek/deepseek-r1:free',
+  process.env.OPENROUTER_PRIMARY_MODEL || 'google/gemma-4-27b-it:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'openrouter/free',
 ];
 
 async function callOpenRouter(prompt) {
@@ -43,7 +43,12 @@ async function callOpenRouter(prompt) {
 
       const data = await res.json();
       console.log('Used model:', model);
-      return data.choices[0].message.content;
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        console.warn('Model ' + model + ' returned empty content — trying next');
+        continue;
+      }
+      return content;
 
     } catch (e) {
       console.warn('Model ' + model + ' threw: ' + e.message);
@@ -80,36 +85,49 @@ function buildPrompt(profile) {
     ? '\n\nThe candidate uploaded this CV/Resume. Read it carefully:\n"""\n' + profile.cv_text + '\n"""\n'
     : '\n\nNo CV was uploaded. Use only the form fields above.\n';
 
+  const skillsBlock = profile.skills
+    ? `\n- Skills listed by candidate: ${profile.skills}`
+    : '';
+
   return `You are a senior hiring manager at Sensussoft, a software company in India.
 A candidate has applied for the role: "${profile.role}".
 
 Form details provided:
 - Name: ${profile.name}
-- Role applied: ${profile.role}
+- Role applied: ${profile.role}${skillsBlock}
 ${cvBlock}
 
-STEP 1 — Identify role category from the role name:
-- Contains "Designer", "UI", "UX", "Visual"                          => CATEGORY = "design"
-- Contains "QA", "Tester", "SDET", "Automation"                      => CATEGORY = "qa"
-- Contains "DevOps", "SRE", "Platform", "Cloud Engineer"             => CATEGORY = "devops"
-- Contains "Product Manager", "PM", "Business Analyst"               => CATEGORY = "product"
-- Contains "Developer", "Engineer", "Mobile", "Frontend", "Backend", "Full Stack" => CATEGORY = "development"
-- Otherwise                                                           => CATEGORY = "development"
+STEP 1 — Validate the role and skills:
+- If the role looks like random characters (e.g. "fyfvcf", "iuwhdygwe", "asdfgh") with no real meaning,
+  return this exact JSON and nothing else:
+  {"error": "invalid_role", "message": "The role entered does not appear to be a valid job title. Please enter a real role like Frontend Developer, UI/UX Designer, or DevOps Engineer."}
+- If the skills look like random characters with no recognizable technology or domain,
+  return this exact JSON and nothing else:
+  {"error": "invalid_skills", "message": "The skills entered do not appear to be valid. Please enter real skills like React, Node.js, Figma, Python, Docker, etc."}
 
-STEP 2 — If a CV was provided, extract from it:
-- The candidate's real years of experience (sum from work history)
-- Technologies / tools they have ACTUALLY used in projects
-- Their strongest area
-If no CV, infer seniority from the role name only (e.g. "Junior" => 1y, "Senior" => 6y).
+STEP 2 — Identify role category from the role name:
+- Contains "Designer", "UI", "UX", "Visual"                                        => CATEGORY = "design"
+- Contains "QA", "Tester", "SDET", "Automation"                                    => CATEGORY = "qa"
+- Contains "DevOps", "SRE", "Platform", "Cloud Engineer"                           => CATEGORY = "devops"
+- Contains "Product Manager", "PM", "Business Analyst"                             => CATEGORY = "product"
+- Contains "Developer", "Engineer", "Mobile", "Frontend", "Backend", "Full Stack"  => CATEGORY = "development"
+- Otherwise                                                                         => CATEGORY = "development"
 
-STEP 3 — Generate a task that matches BOTH the category and the seniority.
+STEP 3 — Analyze the candidate's profile using ALL available data:
+- Form skills field: "${profile.skills || 'not provided'}"
+- CV text (if uploaded): use technologies, projects, and experience from the CV
+- Combine both sources — CV takes priority if it contradicts the form
+- Determine real years of experience from CV work history (if available)
+- Identify the candidate's strongest technologies
+
+STEP 4 — Generate a task that matches BOTH the category and the seniority.
 
 CRITICAL RULES BY CATEGORY:
 - design      => Figma mockup or design system task. NO coding. Deliverable is a Figma file link or PDF.
 - qa          => Test plan, test cases, and one small automation script. Deliverable is a doc + GitHub repo.
 - devops      => CI/CD pipeline, IaC, or deployment automation. Deliverable is a GitHub repo with config files.
 - product     => PRD, user story breakdown, or roadmap. Deliverable is a Google Doc or PDF.
-- development => Coding task. Use technologies from the CV. Deliverable is a GitHub repo link.
+- development => Coding task using the candidate's actual skills from form + CV. Deliverable is a GitHub repo link.
 
 SENIORITY RULES:
 - Junior (0-2y): ~3 hours of work, well-guided, single feature.
@@ -121,23 +139,33 @@ Include exactly 4 evaluation criteria appropriate to the category.
 
 Return ONLY valid JSON with these exact keys (no markdown, no code fences):
 {
-  "category":           "design|qa|devops|product|development",
-  "cv_summary":         "one-sentence read of the candidate based on form + CV",
-  "detected_seniority": "junior|mid|senior",
-  "title":              "short task title",
-  "scenario":           "2-3 sentences setting up the problem",
-  "requirements":       ["...", "...", "..."],
-  "deliverables":       ["...", "..."],
-  "evaluation_criteria":["...", "...", "...", "..."],
-  "deadline_days":      3
+  "category":            "design|qa|devops|product|development",
+  "cv_summary":          "one-sentence read of the candidate based on form + CV",
+  "detected_seniority":  "junior|mid|senior",
+  "title":               "short task title",
+  "scenario":            "2-3 sentences setting up the problem",
+  "requirements":        ["...", "...", "..."],
+  "deliverables":        ["...", "..."],
+  "evaluation_criteria": ["...", "...", "...", "..."],
+  "deadline_days":       3
 }`;
 }
 
 async function generateTask(profile) {
   const prompt = buildPrompt(profile);
   let text = await callOpenRouter(prompt);
+  if (!text) throw new Error('AI returned empty response. Please try again.');
   text = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(text);
+  const parsed = JSON.parse(text);
+
+  // AI returned a validation error
+  if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills') {
+    const err = new Error(parsed.message);
+    err.validationError = true;
+    throw err;
+  }
+
+  return parsed;
 }
 
 // ---------- Build PDF ----------

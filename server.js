@@ -56,6 +56,7 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
     name:           b.full_name || b.name || 'Candidate',
     email:          b.email,
     role:           b.role || 'Developer',
+    skills:         b.skills || '',
     cv_text:        cvText.slice(0, 8000),
     resumeBuffer:   req.file ? req.file.buffer       : null,
     resumeFilename: req.file ? req.file.originalname : null,
@@ -69,8 +70,10 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
     const result = await processCandidate(profile);
     res.json(result);
   } catch (err) {
-    console.error('ERROR:', err.message, err.stack);
-    res.status(500).json({ error: err.message });
+    console.error('ERROR:', err.message);
+    // Validation errors (invalid role/skills) → 400, not 500
+    const status = err.validationError ? 400 : 500;
+    res.status(status).json({ error: err.message });
   }
 
 });
