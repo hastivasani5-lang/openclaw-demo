@@ -23,8 +23,9 @@ async function extractCvText(file) {
     const name = (file.originalname || '').toLowerCase();
     if (file.mimetype === 'application/pdf' || name.endsWith('.pdf')) {
       try {
+        // Suppress pdf-parse test file warnings on Vercel
         const pdfParse = require('pdf-parse');
-        const data = await pdfParse(file.buffer);
+        const data = await pdfParse(file.buffer, { max: 0 });
         return (data.text || '').trim();
       } catch (pdfErr) {
         console.warn('pdf-parse failed:', pdfErr.message, '— continuing without CV text');
