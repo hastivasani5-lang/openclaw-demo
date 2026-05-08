@@ -14,7 +14,7 @@ async function callAI(prompt) {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.0-flash-lite',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 1.0,
