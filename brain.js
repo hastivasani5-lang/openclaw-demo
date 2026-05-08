@@ -55,7 +55,19 @@ async function callOpenRouter(prompt) {
       lastErr = e;
     }
   }
-  throw lastErr || new Error('All models failed');
+
+  // All models failed — check if it's a rate limit
+  const errMsg = lastErr?.message || '';
+  if (errMsg.includes('429') || errMsg.includes('rate') || errMsg.includes('Rate')) {
+    const rateLimitErr = new Error(
+      'OpenRouter free tier daily limit reached (50 requests/day). ' +
+      'Please try again tomorrow, or add credits at openrouter.ai to continue.'
+    );
+    rateLimitErr.validationError = true;  // show as 400, not 500
+    throw rateLimitErr;
+  }
+
+  throw lastErr || new Error('All AI models failed. Please try again.');
 }
 
 // ---------- Gmail transport ----------
