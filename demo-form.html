@@ -388,7 +388,8 @@
         const cvFile = document.getElementById('cv').files[0];
         if (cvFile) formData.append('cv', cvFile);
 
-        const r = await fetch('/api/career-apply', {
+        const BASE = window.location.port === '5500' ? 'http://localhost:4000' : '';
+        const r = await fetch(BASE + '/api/career-apply', {
           method: 'POST',
           body:   formData
         });
