@@ -1,30 +1,32 @@
-// brain.js (v2) — role-aware task generation with Gemini AI
+// brain.js (v2) — role-aware task generation with Groq AI
 require('dotenv').config();
 
 const nodemailer  = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const https       = require('https');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI      = require('openai');
 
-// ---------- Gemini AI call ----------
+// ---------- Groq AI call (uses OpenAI-compatible SDK) ----------
 
 async function callAI(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not set in environment variables.');
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY not set in environment variables.');
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-lite',
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 1.0,
-      maxOutputTokens: 1200,
-    }
+  const client = new OpenAI({
+    apiKey,
+    baseURL: 'https://api.groq.com/openai/v1',
   });
 
-  const result = await model.generateContent(prompt);
-  const text   = result.response.text();
-  console.log('Gemini responded, length:', text.length);
+  const completion = await client.chat.completions.create({
+    model:       'llama-3.3-70b-versatile',
+    messages:    [{ role: 'user', content: prompt }],
+    temperature: 1.0,
+    max_tokens:  1200,
+    response_format: { type: 'json_object' },
+  });
+
+  const text = completion.choices[0].message.content;
+  console.log('Groq responded, length:', text.length);
   return text;
 }
 
