@@ -4,11 +4,24 @@ const express = require('express');
 const multer  = require('multer');
 const mammoth = require('mammoth');
 const cors    = require('cors');
+const path    = require('path');
 
 const { processCandidate } = require('./brain.js');
 
 const app = express();
 app.use(cors());
+
+// ── OpenClaw Skill runner ────────────────────────────────────────────────────
+// Loads and runs the candidate-screening skill directly
+async function runOpenClawSkill(profile) {
+  try {
+    const skillRun = require('./candidate-screening/run.js');
+    return await skillRun(profile);
+  } catch (err) {
+    console.warn('[openclaw] Skill run failed, falling back to direct:', err.message);
+    return await processCandidate(profile);
+  }
+}
 
 // ── Multer — memory storage, 5MB limit ──────────────────────────────────────
 const upload = multer({
@@ -132,7 +145,9 @@ app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
   };
 
   try {
-    const result = await processCandidate(profile);
+    // ── Fire through OpenClaw skill pipeline ───────────────────────────────
+    console.log('[openclaw] Firing career.form.submitted event...');
+    const result = await runOpenClawSkill(profile);
     res.json(result);
   } catch (err) {
     console.error('[career-apply] ERROR:', err.message);
