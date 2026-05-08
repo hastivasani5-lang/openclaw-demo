@@ -1,0 +1,511 @@
+require('dotenv').config();
+
+const OpenAI = require('openai');
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+
+const client = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: 'https://openrouter.ai/api/v1',
+});
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD.replace(/\s/g, ''),
+  },
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getLevel(years) {
+  const y = parseInt(years) || 0;
+  if (y <= 2) return 'JUNIOR';
+  if (y <= 5) return 'MID';
+  return 'SENIOR';
+}
+
+// ─── Generate Task via AI ────────────────────────────────────────────────────
+
+async function generateTask(profile) {
+  const level = getLevel(profile.experience_years);
+  const skillsList = profile.skills.join(', ');
+
+  const prompt = `
+You are a senior technical hiring manager at a software company called Sensussoft.
+Your job is to create a highly relevant, role-specific coding assignment for a candidate.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CANDIDATE PROFILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Name            : ${profile.name}
+Role Applied For: ${profile.role}
+Experience      : ${profile.experience_years} years  (Level: ${level})
+Skills Listed   : ${skillsList}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TASK GENERATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ROLE ANALYSIS:
+   - Carefully read the "Role Applied For" field.
+   - The task MUST be directly relevant to that role.
+   - Examples:
+       Frontend Developer   → UI component, dashboard, responsive page
+       Backend Developer    → REST API, database design, authentication
+       Full Stack Developer → End-to-end feature with frontend + backend
+       React Developer      → React component, state management, hooks
+       Node.js Developer    → Express API, middleware, async operations
+       Python Developer     → Script, data processing, Flask/Django API
+       DevOps Engineer      → CI/CD pipeline, Docker setup, deployment
+       Data Scientist       → Data analysis, ML model, visualization
+       Mobile Developer     → App screen, navigation, API integration
+       QA Engineer          → Test cases, automation script, bug report
+
+2. SKILLS ANALYSIS:
+   - Read the "Skills Listed" carefully.
+   - The task MUST require the candidate to USE their listed skills.
+   - If they listed React → task must involve React.
+   - If they listed Node.js → task must involve Node.js.
+   - If they listed Python + Django → task must use both.
+   - Do NOT assign tasks using technologies they did NOT mention.
+
+3. EXPERIENCE LEVEL:
+   - JUNIOR  (0-2 yrs): Simple, well-defined task. Clear step-by-step requirements.
+     No ambiguity. Basic CRUD, simple UI, or small script.
+   - MID     (3-5 yrs): Moderate complexity. Involves design decisions.
+     Integration of multiple skills. Performance or UX considerations.
+   - SENIOR  (6+ yrs): Complex, open-ended, real-world scenario.
+     Architecture decisions, scalability, security, code quality expected.
+
+4. TASK QUALITY:
+   - Title must be specific (NOT generic like "Build an App").
+     Good: "React Dashboard with REST API Integration"
+     Bad:  "Build a web application"
+   - Scenario must read like a real company brief (2-3 sentences).
+   - Requirements must be concrete and testable (4-6 items).
+   - Deliverables must be clear (what to submit).
+   - Evaluation criteria must reflect what matters for the role.
+   - Deadline: Junior = 3 days, Mid = 4 days, Senior = 5 days.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Return ONLY valid JSON. No explanation. No markdown. No extra text.
+
+{
+  "title": "",
+  "scenario": "",
+  "requirements": ["req 1", "req 2", "req 3", "req 4"],
+  "deliverables": ["deliverable 1", "deliverable 2"],
+  "evaluation_criteria": ["criteria 1", "criteria 2", "criteria 3", "criteria 4"],
+  "deadline": ""
+}
+`;
+
+  const completion = await client.chat.completions.create({
+    model: 'deepseek/deepseek-chat-v3-0324',
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  let text = completion.choices[0].message.content;
+  text = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(text);
+}
+
+// ─── Build PDF ────────────────────────────────────────────────────────────────
+
+function buildPDF(profile, task) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 0, size: 'A4' });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const W = doc.page.width;   // 595
+    const PINK = '#e91e8c';
+    const NAVY = '#0d1b2a';
+    const LIGHT_PINK = '#fce4f3';
+    const GRAY = '#6b7280';
+    const level = getLevel(profile.experience_years);
+
+    // ── Navy Header ──────────────────────────────────────────────────────────
+    doc.rect(0, 0, W, 90).fill(NAVY);
+
+    // Brand name
+    doc.fillColor('#ffffff')
+       .fontSize(20)
+       .font('Helvetica-Bold')
+       .text('Sensussoft', 40, 22);
+
+    // Tagline
+    doc.fillColor('#94a3b8')
+       .fontSize(9)
+       .font('Helvetica')
+       .text('AI-Generated Candidate Assessment', 40, 46);
+
+    // Level badge (top-right)
+    const badgeW = 70, badgeH = 22, badgeX = W - 40 - badgeW, badgeY = 28;
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 11)
+       .stroke('#ffffff');
+    doc.fillColor('#ffffff')
+       .fontSize(9)
+       .font('Helvetica-Bold')
+       .text(level, badgeX, badgeY + 6, { width: badgeW, align: 'center' });
+
+    // Pink accent line under header
+    doc.rect(0, 90, W, 4).fill(PINK);
+
+    // ── Task Title & Scenario ────────────────────────────────────────────────
+    let y = 114;
+
+    doc.fillColor(NAVY)
+       .fontSize(18)
+       .font('Helvetica-Bold')
+       .text(task.title, 40, y, { width: W - 80 });
+
+    y = doc.y + 10;
+
+    doc.fillColor('#374151')
+       .fontSize(10)
+       .font('Helvetica')
+       .text(task.scenario, 40, y, { width: W - 80, lineGap: 3 });
+
+    y = doc.y + 18;
+
+    // ── Candidate Info Grid ──────────────────────────────────────────────────
+    doc.rect(40, y, W - 80, 68).stroke('#e5e7eb');
+
+    const col1 = 56, col2 = W / 2 + 10;
+    const labelColor = '#9ca3af', valueColor = NAVY;
+
+    // Row 1
+    doc.fillColor(labelColor).fontSize(7).font('Helvetica-Bold')
+       .text('NAME', col1, y + 10);
+    doc.fillColor(valueColor).fontSize(10).font('Helvetica')
+       .text(profile.name, col1, y + 20);
+
+    doc.fillColor(labelColor).fontSize(7).font('Helvetica-Bold')
+       .text('EMAIL', col2, y + 10);
+    doc.fillColor(valueColor).fontSize(10).font('Helvetica')
+       .text(profile.email, col2, y + 20);
+
+    // Row 2
+    doc.fillColor(labelColor).fontSize(7).font('Helvetica-Bold')
+       .text('ROLE', col1, y + 38);
+    doc.fillColor(valueColor).fontSize(10).font('Helvetica')
+       .text(profile.role, col1, y + 48);
+
+    doc.fillColor(labelColor).fontSize(7).font('Helvetica-Bold')
+       .text('EXPERIENCE', col2, y + 38);
+    doc.fillColor(valueColor).fontSize(10).font('Helvetica')
+       .text(`${profile.experience_years} years`, col2, y + 48);
+
+    // Skills row
+    doc.fillColor(labelColor).fontSize(7).font('Helvetica-Bold')
+       .text('SKILLS', col1, y + 56);
+    // (skills printed below grid)
+
+    y += 68 + 6;
+    doc.fillColor(valueColor).fontSize(10).font('Helvetica')
+       .text(profile.skills.join(', '), col1, y, { width: W - 80 });
+
+    y = doc.y + 22;
+
+    // ── Section helper ───────────────────────────────────────────────────────
+    function section(title, items, bullet) {
+      // Pink left bar + title
+      doc.rect(40, y, 3, 16).fill(PINK);
+      doc.fillColor(NAVY).fontSize(13).font('Helvetica-Bold')
+         .text(title, 50, y, { width: W - 90 });
+      y = doc.y + 8;
+
+      items.forEach((item, i) => {
+        if (bullet === 'number') {
+          // Pink circle with number
+          doc.circle(52, y + 5, 8).fill(PINK);
+          doc.fillColor('#ffffff').fontSize(7).font('Helvetica-Bold')
+             .text(String(i + 1), 48, y + 2, { width: 8, align: 'center' });
+          doc.fillColor('#374151').fontSize(10).font('Helvetica')
+             .text(item, 68, y, { width: W - 110, lineGap: 2 });
+        } else if (bullet === 'arrow') {
+          doc.fillColor(PINK).fontSize(11).font('Helvetica-Bold')
+             .text('›', 44, y);
+          doc.fillColor('#374151').fontSize(10).font('Helvetica')
+             .text(item, 58, y, { width: W - 100, lineGap: 2 });
+        } else {
+          // dot
+          doc.circle(48, y + 5, 4).fill(PINK);
+          doc.fillColor('#374151').fontSize(10).font('Helvetica')
+             .text(item, 62, y, { width: W - 104, lineGap: 2 });
+        }
+        y = doc.y + 6;
+      });
+
+      y += 6;
+    }
+
+    // ── Requirements ────────────────────────────────────────────────────────
+    if (task.requirements && task.requirements.length) {
+      section('Requirements', task.requirements, 'number');
+    }
+
+    // ── Deliverables ─────────────────────────────────────────────────────────
+    if (task.deliverables && task.deliverables.length) {
+      section('Deliverables', task.deliverables, 'arrow');
+    }
+
+    // ── Evaluation Criteria ──────────────────────────────────────────────────
+    if (task.evaluation_criteria && task.evaluation_criteria.length) {
+      section('Evaluation Criteria', task.evaluation_criteria, 'dot');
+    }
+
+    // ── Deadline Box ─────────────────────────────────────────────────────────
+    if (task.deadline) {
+      y += 4;
+      doc.rect(40, y, W - 80, 32).fill(LIGHT_PINK);
+      doc.fillColor(PINK).fontSize(11).font('Helvetica-Bold')
+         .text(`#⏰  Deadline: ${task.deadline}`, 56, y + 10, { width: W - 112 });
+      y += 44;
+    }
+
+    // ── Footer ───────────────────────────────────────────────────────────────
+    const footerY = doc.page.height - 44;
+    doc.rect(0, footerY - 4, W, 48).fill('#f9fafb');
+    doc.rect(0, footerY - 4, W, 2).fill(PINK);
+
+    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+       .text(
+         `© ${new Date().getFullYear()} Sensussoft. All rights reserved.`,
+         0, footerY + 10,
+         { width: W, align: 'center' }
+       );
+
+    doc.end();
+  });
+}
+
+// ─── Send Email ───────────────────────────────────────────────────────────────
+
+async function sendEmail(profile, task, pdfBuffer) {
+  const level = getLevel(profile.experience_years);
+  const PINK = '#e91e8c';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Logo -->
+        <tr>
+          <td align="center" style="padding-bottom:20px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:${PINK};border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;">
+                  <span style="color:#fff;font-size:18px;font-weight:bold;">S</span>
+                </td>
+                <td style="padding-left:10px;font-size:18px;font-weight:bold;color:#111;">Sensussoft</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Card -->
+        <tr>
+          <td style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+            <!-- Top pink line -->
+            <div style="height:4px;background:${PINK};"></div>
+
+            <!-- Body -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="padding:36px 40px;">
+
+              <!-- Heading -->
+              <tr>
+                <td style="padding-bottom:8px;">
+                  <h1 style="margin:0;font-size:22px;color:#111;">
+                    Hi ${profile.name}, your task is attached! 👋
+                  </h1>
+                </td>
+              </tr>
+
+              <!-- Subtext -->
+              <tr>
+                <td style="padding-bottom:28px;color:#6b7280;font-size:14px;line-height:1.6;">
+                  Thank you for applying to <strong>Sensussoft</strong> for the
+                  <strong style="color:${PINK};">${profile.role}</strong> position.
+                </td>
+              </tr>
+
+              <tr><td style="border-top:1px solid #f0f0f0;padding-bottom:24px;"></td></tr>
+
+              <!-- PDF notice box -->
+              <tr>
+                <td style="padding-bottom:28px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#fce4f3;border-radius:10px;padding:20px 24px;">
+                    <tr>
+                      <td width="36" valign="top" style="padding-right:14px;font-size:22px;">🔗</td>
+                      <td>
+                        <div style="font-weight:bold;color:#111;font-size:14px;margin-bottom:6px;">
+                          Your coding task is in the PDF
+                        </div>
+                        <div style="color:#6b7280;font-size:13px;line-height:1.6;">
+                          We've attached a personalised PDF with your full task details —
+                          requirements, deliverables, and evaluation criteria. Please open
+                          the attachment to get started.
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- What to do next -->
+              <tr>
+                <td style="padding-bottom:16px;">
+                  <div style="font-size:11px;font-weight:bold;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">
+                    WHAT TO DO NEXT
+                  </div>
+
+                  <!-- Step 1 -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                    <tr>
+                      <td width="28" valign="top">
+                        <div style="background:${PINK};color:#fff;border-radius:50%;width:22px;height:22px;
+                          text-align:center;line-height:22px;font-size:11px;font-weight:bold;">1</div>
+                      </td>
+                      <td style="padding-left:12px;font-size:14px;color:#374151;padding-top:2px;">
+                        Open the attached PDF and read your task carefully.
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="border-top:1px solid #f0f0f0;margin-bottom:14px;"></div>
+
+                  <!-- Step 2 -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                    <tr>
+                      <td width="28" valign="top">
+                        <div style="background:${PINK};color:#fff;border-radius:50%;width:22px;height:22px;
+                          text-align:center;line-height:22px;font-size:11px;font-weight:bold;">2</div>
+                      </td>
+                      <td style="padding-left:12px;font-size:14px;color:#374151;padding-top:2px;">
+                        Complete the task and push your code to the repository.
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="border-top:1px solid #f0f0f0;margin-bottom:14px;"></div>
+
+                  <!-- Step 3 -->
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="28" valign="top">
+                        <div style="background:${PINK};color:#fff;border-radius:50%;width:22px;height:22px;
+                          text-align:center;line-height:22px;font-size:11px;font-weight:bold;">3</div>
+                      </td>
+                      <td style="padding-left:12px;font-size:14px;color:#374151;padding-top:2px;">
+                        Reply to this email with your GitHub repo link within
+                        <strong style="color:${PINK};">3 days.</strong>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA Button -->
+              <tr>
+                <td style="padding-top:24px;padding-bottom:28px;">
+                  <a href="#" style="display:inline-block;background:${PINK};color:#fff;
+                    text-decoration:none;padding:13px 28px;border-radius:8px;
+                    font-size:14px;font-weight:bold;">
+                    View Starter Repository →
+                  </a>
+                </td>
+              </tr>
+
+              <tr><td style="border-top:1px solid #f0f0f0;padding-bottom:20px;"></td></tr>
+
+              <!-- Sign off -->
+              <tr>
+                <td style="font-size:14px;color:#6b7280;line-height:1.8;">
+                  Good luck — we're excited to see what you build!<br>
+                  <strong style="color:#111;">Sensussoft Hiring Team</strong>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td align="center" style="padding-top:24px;font-size:12px;color:#9ca3af;">
+            © ${new Date().getFullYear()} Sensussoft. All rights reserved.
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+
+</body>
+</html>
+  `;
+
+  const attachments = [
+    {
+      filename: `Sensussoft_Task_${profile.name.replace(/\s+/g, '_')}.pdf`,
+      content: pdfBuffer,
+      contentType: 'application/pdf',
+    },
+  ];
+
+  // Attach candidate's resume if provided
+  if (profile.resumeBuffer) {
+    attachments.push({
+      filename: profile.resumeFilename || 'resume.pdf',
+      content: profile.resumeBuffer,
+      contentType: 'application/pdf',
+    });
+  }
+
+  const info = await transporter.sendMail({
+    from: `"Sensussoft Hiring" <${process.env.GMAIL_USER}>`,
+    to: profile.email,
+    subject: `Your Hiring Task – ${profile.role} Position`,
+    html,
+    attachments,
+  });
+
+  console.log('✅ Email sent! MessageId:', info.messageId);
+  console.log('📧 Sent to:', profile.email);
+}
+
+// ─── Main Entry ───────────────────────────────────────────────────────────────
+
+async function processCandidate(profile) {
+  console.log('🔄 Step 1: Generating task...');
+  const task = await generateTask(profile);
+  console.log('✅ Task generated:', task.title);
+
+  console.log('🔄 Step 2: Building PDF...');
+  const pdfBuffer = await buildPDF(profile, task);
+  console.log('✅ PDF built, size:', pdfBuffer.length, 'bytes');
+
+  console.log('🔄 Step 3: Sending email to', profile.email);
+  await sendEmail(profile, task, pdfBuffer);
+  console.log('✅ Email sent successfully!');
+
+  return {
+    ok: true,
+    task_title: task.title,
+  };
+}
+
+module.exports = { processCandidate };

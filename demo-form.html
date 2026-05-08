@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Hiring Form</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 40px 48px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .card-header .icon {
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
+
+    .card-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+    }
+
+    .card-header p {
+      font-size: 14px;
+      color: #888;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e8e8e8;
+      border-radius: 10px;
+      font-size: 15px;
+      color: #333;
+      background: #fafafa;
+      transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      border-color: #667eea;
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
+    }
+
+    .form-group input::placeholder,
+    .form-group textarea::placeholder {
+      color: #bbb;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 110px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* File upload */
+    .file-drop {
+      border: 2px dashed #d1d5db;
+      border-radius: 10px;
+      padding: 22px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: #fafafa;
+      transition: border-color 0.25s, background 0.25s;
+    }
+
+    .file-drop:hover, .file-drop.dragover {
+      border-color: #667eea;
+      background: #f0f0ff;
+    }
+
+    .file-drop.selected {
+      border-color: #667eea;
+      background: #f0f0ff;
+    }
+
+    .file-icon { font-size: 28px; margin-bottom: 6px; }
+
+    .file-text {
+      font-size: 14px;
+      color: #555;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .file-hint {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.15s;
+      letter-spacing: 0.3px;
+    }
+
+    .submit-btn:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #1a1a2e;
+      color: #fff;
+      padding: 14px 22px;
+      border-radius: 10px;
+      font-size: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s, transform 0.3s;
+      max-width: 320px;
+      z-index: 999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .toast.success { border-left: 4px solid #4caf50; }
+    .toast.error   { border-left: 4px solid #f44336; }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="icon">🤖</div>
+      <h1>Apply Here</h1>
+      <p>Fill in your details and let AI screen your application</p>
+    </div>
+
+    <div class="form-group">
+      <label>Full Name</label>
+      <input id="name" type="text" placeholder="e.g. Rahul Sharma">
+    </div>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input id="email" type="email" placeholder="e.g. rahul@example.com">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Role</label>
+        <input id="role" type="text" placeholder="e.g. Frontend Dev">
+      </div>
+      <div class="form-group">
+        <label>Experience (yrs)</label>
+        <input id="years" type="number" placeholder="e.g. 3" min="0">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Skills</label>
+      <textarea id="skills" placeholder="e.g. React, Node.js, Python, SQL..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Resume (PDF only)</label>
+      <div class="file-drop" id="fileDrop" onclick="document.getElementById('resume').click()">
+        <div class="file-icon">📄</div>
+        <div class="file-text" id="fileText">Click to upload or drag & drop your resume</div>
+        <div class="file-hint">PDF format only • Max 5MB</div>
+      </div>
+      <input type="file" id="resume" accept=".pdf" style="display:none" onchange="handleFile(this)">
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitForm()">
+      🚀 Submit Application
+    </button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Drag & Drop ──────────────────────────────────────────────────────────
+    const drop = document.getElementById('fileDrop');
+
+    drop.addEventListener('dragover', e => {
+      e.preventDefault();
+      drop.classList.add('dragover');
+    });
+
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) setFile(file);
+    });
+
+    function handleFile(input) {
+      if (input.files[0]) setFile(input.files[0]);
+    }
+
+    function setFile(file) {
+      if (file.type !== 'application/pdf') {
+        showToast('❌ Only PDF files are allowed.', 'error');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('❌ File too large. Max 5MB.', 'error');
+        return;
+      }
+      // Put file into the hidden input
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('resume').files = dt.files;
+
+      drop.classList.add('selected');
+      document.getElementById('fileText').textContent = `✅ ${file.name}`;
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      setTimeout(() => { toast.className = 'toast'; }, 4000);
+    }
+
+    // ── Submit ───────────────────────────────────────────────────────────────
+    async function submitForm() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Submitting...';
+
+      try {
+        const resumeFile = document.getElementById('resume').files[0];
+
+        // Use FormData so we can send the PDF file
+        const formData = new FormData();
+        formData.append('full_name',        document.getElementById('name').value);
+        formData.append('email',            document.getElementById('email').value);
+        formData.append('role',             document.getElementById('role').value);
+        formData.append('experience_years', document.getElementById('years').value);
+        formData.append('skills',           document.getElementById('skills').value);
+        if (resumeFile) formData.append('resume', resumeFile);
+
+        const response = await fetch('http://localhost:4000/api/career-apply', {
+          method: 'POST',
+          body: formData   // No Content-Type header — browser sets it with boundary
+        });
+
+        const data = await response.json();
+        console.log(data);
+        showToast('✅ Application submitted successfully!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('❌ Something went wrong. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Submit Application';
+      }
+    }
+  </script>
+
+</body>
+</html>
