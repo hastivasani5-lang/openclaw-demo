@@ -11,8 +11,8 @@ const { processCandidate } = require('./brain.js');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Note: Do NOT add express.json() or express.urlencoded() here
+// Multer handles multipart/form-data parsing for the /api/career-apply route
 
 // Memory storage — CV never written to disk
 const upload = multer({
@@ -63,6 +63,11 @@ function looksLikeCV(text) {
   return matches.length >= 3;  // at least 3 CV keywords
 }
 app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
+
+  // Debug log — visible in Vercel function logs
+  console.log('Body keys:', Object.keys(req.body || {}));
+  console.log('File:', req.file ? req.file.originalname : 'none');
+  console.log('Email:', req.body?.email);
 
   const cvText = await extractCvText(req.file);
 
