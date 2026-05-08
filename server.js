@@ -27,9 +27,9 @@ async function extractCvText(file) {
     const name = file.originalname.toLowerCase();
 
     if (file.mimetype === 'application/pdf' || name.endsWith('.pdf')) {
-      // Use pdf-parse safely — dynamic require avoids Vercel build issues
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-      const data = await pdfParse(file.buffer);
+      const { PDFParse } = require('pdf-parse');
+      const parser = new PDFParse({ verbosity: 0, data: file.buffer });
+      const data = await parser.getText({});
       return (data.text || '').trim();
     }
 
@@ -46,10 +46,40 @@ async function extractCvText(file) {
   }
 }
 
-// Single endpoint
+// CV resume keywords — agar inme se koi nahi mila toh CV nahi hai
+const CV_KEYWORDS = [
+  'experience','education','skills','work','employment','project','summary',
+  'objective','profile','qualification','achievement','certification',
+  'university','college','degree','bachelor','master','engineer','developer',
+  'intern','job','position','company','organization','responsibilities',
+  'worked','developed','designed','managed','led','built','created',
+  'resume','curriculum','vitae','cv','career','professional'
+];
+
+function looksLikeCV(text) {
+  if (!text || text.trim().length < 100) return false;
+  const lower = text.toLowerCase();
+  const matches = CV_KEYWORDS.filter(k => lower.includes(k));
+  return matches.length >= 3;  // at least 3 CV keywords
+}
 app.post('/api/career-apply', upload.single('cv'), async (req, res) => {
 
   const cvText = await extractCvText(req.file);
+
+  // ── CV validation ────────────────────────────────────────────────────────
+  // File uploaded but text could not be extracted (scanned image PDF etc.)
+  if (req.file && !cvText) {
+    return res.status(400).json({
+      error: '❌ Could not read text from the uploaded file. Please make sure your CV is a text-based PDF or DOCX (not a scanned image).'
+    });
+  }
+
+  // File uploaded but doesn't look like a CV/Resume
+  if (req.file && cvText && !looksLikeCV(cvText)) {
+    return res.status(400).json({
+      error: '❌ The uploaded file does not appear to be a CV or Resume. Please upload your actual resume containing work experience, skills, and education.'
+    });
+  }
 
   const b = req.body || {};
   const profile = {

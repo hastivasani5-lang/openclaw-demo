@@ -104,6 +104,9 @@ STEP 1 — Validate the role and skills:
 - If the skills look like random characters with no recognizable technology or domain,
   return this exact JSON and nothing else:
   {"error": "invalid_skills", "message": "The skills entered do not appear to be valid. Please enter real skills like React, Node.js, Figma, Python, Docker, etc."}
+- If a CV was provided but it does NOT look like a resume (no work experience, education, or skills sections),
+  return this exact JSON and nothing else:
+  {"error": "invalid_cv", "message": "The uploaded document does not appear to be a CV or Resume. Please upload your actual resume."}
 
 STEP 2 — Identify role category from the role name:
 - Contains "Designer", "UI", "UX", "Visual"                                        => CATEGORY = "design"
@@ -159,7 +162,7 @@ async function generateTask(profile) {
   const parsed = JSON.parse(text);
 
   // AI returned a validation error
-  if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills') {
+  if (parsed.error === 'invalid_role' || parsed.error === 'invalid_skills' || parsed.error === 'invalid_cv') {
     const err = new Error(parsed.message);
     err.validationError = true;
     throw err;
